@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 # Fixes trivy's AWS-0136 (SNS topic encryption should use a customer
 # managed key, not the AWS-managed default). Dedicated to this one
-# topic, not shared account-wide the way bootstrap/terraform-state's
+# topic, not shared account-wide the way KandlerLi/terraform-state's
 # own shared_kms_key.tf is: that key lives in eu-central-1 and can't
 # encrypt anything here, since this repo's entire provider is pinned to
 # us-east-1 (see versions.tf's own comment). A single-consumer,
@@ -32,7 +32,7 @@ resource "aws_kms_key" "alerts" {
         # documentation for this exact scenario
         # (sns-key-management.html, "Enable compatibility between
         # event sources from AWS services and encrypted topics") --
-        # same shape as bootstrap/terraform-state's own
+        # same shape as KandlerLi/terraform-state's own
         # AllowCloudWatchAlarmsToPublishToSNS statement, just scoped to
         # this one key instead of the shared one.
         Sid    = "AllowCloudWatchAlarmsToPublish"
