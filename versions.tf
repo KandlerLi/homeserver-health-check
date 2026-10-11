@@ -9,9 +9,7 @@ terraform {
   }
 }
 
-# Route53 health checks and their CloudWatch alarm metrics are only
-# published in us-east-1, regardless of where the checked endpoint
-# actually is.
+# Route53 health check metrics exist only in us-east-1.
 provider "aws" {
   region = "us-east-1"
 }
