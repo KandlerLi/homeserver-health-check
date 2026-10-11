@@ -28,6 +28,19 @@ response at all (even the 301 redirect to `www` that Traefik serves for
 it), confirms the home network, DynDNS record, and Traefik are all
 actually working end-to-end.
 
+## Why us-east-1, with its own KMS key
+
+Route53 health checks publish their CloudWatch metrics only in
+`us-east-1`, wherever the checked endpoint is, so this whole root runs
+there. That also rules out the workspace's shared customer managed key
+([`terraform-state`'s `shared_kms_key.tf`](https://github.com/KandlerLi/terraform-state/blob/main/shared_kms_key.tf)):
+it lives in `eu-central-1` and can't encrypt anything here. The SNS topic
+gets its own dedicated key instead (trivy AWS-0095/AWS-0136), referenced
+directly within this root. Its key policy lets CloudWatch Alarms publish
+to the encrypted topic, in the shape AWS documents for that case
+("Enable compatibility between event sources from AWS services and
+encrypted topics" in the SNS key management docs).
+
 ## `alert_email` has no default, deliberately
 
 Same as `aws-budget`: this repo is public, so the address isn't committed

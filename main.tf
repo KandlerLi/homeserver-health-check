@@ -1,14 +1,6 @@
 data "aws_caller_identity" "current" {}
 
-# Fixes trivy's AWS-0136 (SNS topic encryption should use a customer
-# managed key, not the AWS-managed default). Dedicated to this one
-# topic, not shared account-wide the way KandlerLi/terraform-state's
-# own shared_kms_key.tf is: that key lives in eu-central-1 and can't
-# encrypt anything here, since this repo's entire provider is pinned to
-# us-east-1 (see versions.tf's own comment). A single-consumer,
-# region-specific key doesn't need the cross-repo alias-lookup pattern
-# the shared key uses -- just a direct resource reference within this
-# same root.
+# Own key, not the shared CMK: see README, "Why us-east-1, with its own KMS key".
 resource "aws_kms_key" "alerts" {
   description             = "CMK for homeserver-health-check's own SNS alert topic"
   deletion_window_in_days = 30
@@ -27,14 +19,7 @@ resource "aws_kms_key" "alerts" {
         Resource = "*"
       },
       {
-        # CloudWatch Alarms' own required key-policy shape for
-        # publishing to an SSE-KMS-encrypted SNS topic, per AWS's own
-        # documentation for this exact scenario
-        # (sns-key-management.html, "Enable compatibility between
-        # event sources from AWS services and encrypted topics") --
-        # same shape as KandlerLi/terraform-state's own
-        # AllowCloudWatchAlarmsToPublishToSNS statement, just scoped to
-        # this one key instead of the shared one.
+        # AWS's required shape for CloudWatch Alarms publishing to an SSE-KMS SNS topic.
         Sid    = "AllowCloudWatchAlarmsToPublish"
         Effect = "Allow"
         Principal = {
@@ -76,9 +61,6 @@ resource "aws_route53_health_check" "homeserver" {
 resource "aws_sns_topic" "alerts" {
   name = "homeserver-health-alerts"
 
-  # Fixes trivy's AWS-0095/AWS-0136 (topic should be encrypted with a
-  # customer managed key) -- see aws_kms_key.alerts above for why this
-  # is its own dedicated key rather than the workspace's shared one.
   kms_master_key_id = aws_kms_key.alerts.arn
 }
 
@@ -104,8 +86,6 @@ resource "aws_cloudwatch_metric_alarm" "homeserver_unreachable" {
   threshold           = 1
   comparison_operator = "LessThanThreshold"
 
-  # Notify on both going unhealthy and recovering -- knowing it's back up
-  # matters as much as knowing it went down.
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
 }
