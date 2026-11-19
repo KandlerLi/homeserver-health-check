@@ -9,12 +9,13 @@ it recovers).
 ## Why this exists, and why it's this small
 
 This is deliberately the *only* piece of monitoring that runs in AWS. The
-rest (host health, container health, service reachability, certificate/DNS
-expiry) is planned to run entirely on the homeserver itself — a full
-Prometheus + Grafana stack would have real ongoing AWS cost for something
-that can run for free on hardware already paid for. But monitoring that
-lives entirely on the homeserver can't tell you the homeserver itself is
-unreachable. This is that one external, independent check — small,
+rest (host and container health, per-service probes, certificate expiry,
+backups, logs) runs on the homeserver itself: Prometheus with its exporters
+and Loki on the host, Grafana and Alertmanager in k3s (`home-infra`'s
+`monitoring` role, `k3s-apps`). Running that in AWS would have real ongoing
+cost for something hardware already paid for does for free. But monitoring
+that lives entirely on the homeserver can't tell you the homeserver itself
+is unreachable. This is that one external, independent check — small,
 cheap (~$0.50-1/month), and specifically placed outside the thing it's
 watching.
 
@@ -27,6 +28,17 @@ DynDNS-managed record pointing at the home IP; checking it, and getting a
 response at all (even the 301 redirect to `www` that Traefik serves for
 it), confirms the home network, DynDNS record, and Traefik are all
 actually working end-to-end.
+
+## Timing and what it doesn't cover
+
+Each Route53 checker marks the endpoint unhealthy after 3 failed requests
+30 s apart; `HealthCheckStatus` drops to 0 once fewer than about 18% of the
+checkers report it healthy. The alarm fires on the first minute whose
+minimum is 0, so the email arrives roughly 2-3 minutes into an outage, and
+outages shorter than that may not alert at all. A 2xx or 3xx within the
+timeout counts as healthy, so Traefik's redirect is enough: a single broken
+service behind it doesn't trip this check, and Route53 doesn't validate the
+TLS certificate. Both are covered by the homeserver's own blackbox probes.
 
 ## Why us-east-1, with its own KMS key
 
@@ -41,12 +53,13 @@ to the encrypted topic, in the shape AWS documents for that case
 ("Enable compatibility between event sources from AWS services and
 encrypted topics" in the SNS key management docs).
 
-## `alert_email` has no default, deliberately
+## `alert_email` has no default
 
-Same as `aws-budget`: this repo is public, so the address isn't committed
-to git history. It's supplied via `TF_VAR_alert_email`, sourced from this
-repository's own `ALERT_EMAIL` GitHub Actions variable (set automatically
-by `repo-infra`).
+Like every variable here, it has no default in `variables.tf`; its value is
+committed in `terraform.tfvars`, the single source for CI and local runs
+alike (since 2026-09-23). The repo is public, so the address is too; it was
+already in `repo-infra`'s public history, which used to set it as an
+`ALERT_EMAIL` Actions variable.
 
 ## One manual step nothing can automate
 
@@ -66,7 +79,6 @@ Terraform can skip.
 ## Deploy
 
 ```bash
-export TF_VAR_alert_email="you@example.com"
 terraform init
 terraform plan
 terraform apply
@@ -77,8 +89,9 @@ native S3 lock files.
 
 ## Runner
 
-Self-hosted home runner (`[self-hosted, home, debian]`), same as
-`dyndns`/`website`/`aws-budget`.
+Self-hosted runner label `[self-hosted, home, debian]` through
+`gha-common`'s reusable workflows, served by this repo's ARC runner scale set
+in k3s (`k3s-node-2`, `k3s-bootstrap`; ADR 0027), same as the other AWS repos.
 
 ## Local validation
 
