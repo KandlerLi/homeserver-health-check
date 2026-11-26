@@ -89,9 +89,8 @@ native S3 lock files.
 
 ## Runner
 
-Self-hosted runner label `[self-hosted, home, debian]` through
-`gha-common`'s reusable workflows, served by this repo's ARC runner scale set
-in k3s (`k3s-node-2`, `k3s-bootstrap`; ADR 0027), same as the other AWS repos.
+GitHub-hosted (`ubuntu-latest`), through `gha-common`'s reusable workflows
+since its v2.0.0: nothing here needs the home network.
 
 ## Local validation
 
